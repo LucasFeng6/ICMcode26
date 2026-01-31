@@ -11,6 +11,9 @@ from task1_model.sampling import WindowSpec
 from task1_model.evaluate import Design, evaluate_design
 from task1_model.optimize import grid_search
 
+def log_stage(msg: str) -> None:
+    print(f"[Stage] {msg}")
+
 def load_weather_csv(path: str) -> tuple[pd.DatetimeIndex, pd.DataFrame, float]:
     """
     CSV required columns:
@@ -56,6 +59,7 @@ def compute_UA_total(bg: BuildingGeom, env: EnvelopeParams) -> tuple[float, dict
     return float(UA), Awin
 
 def main():
+    log_stage("start")
     # -------------------------
     # User inputs (edit here)  # 中文：用户输入（在此处修改）
     # -------------------------
@@ -100,6 +104,7 @@ def main():
     # -------------------------
     # 读取天气数据
     # -------------------------
+    log_stage("load weather data")
     times, weather, dt_hours = load_weather_csv(weather_path)
 
     # 建筑面积与 UA（总传热系数×面积）
@@ -112,6 +117,7 @@ def main():
     # -------------------------
     # Baseline evaluation (no shading)  # 中文：基准方案评估（无遮阳）
     # -------------------------
+    log_stage("baseline evaluation")
     baseline = Design(D_oh=0.0, D_fin=0.0, beta_fin_deg=0.0)
     base_out = evaluate_design(
         times, weather, lat_deg,
@@ -150,6 +156,7 @@ def main():
     # -------------------------
     # Optimization grid (task 1)  # 中文：优化网格（Task 1）
     # -------------------------
+    log_stage("grid search optimization")
     D_oh_list = np.linspace(0.0, 2.0, 11)        # 0..2m  # 中文：挑檐深度范围 0..2 米（仅南向生效）
     # For N/E/W we always install fins; D_fin is kept as an "on/off" flag in geometry generation.
     D_fin_list = np.array([1.0])                 # 中文：固定为启用鳍片（任意正值均可）
@@ -169,6 +176,8 @@ def main():
         baseline_J, baseline_peak,
         D_oh_list, D_fin_list, beta_list
     )
+
+    log_stage("grid search complete")
 
     print("\n=== Best feasible retrofit ===")
     print("Design:", best.design)
