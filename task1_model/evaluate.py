@@ -1,4 +1,4 @@
-# task1_model/evaluate.py
+# task1_model/evaluate.py  # 中文：方案评估（遮阳、眩光、采光、能耗与指标）
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
@@ -35,6 +35,9 @@ def build_facade_scene_and_samples(
 ) -> tuple[RayScene, np.ndarray]:
     """
     Create scene (overhang + fins) in LOCAL coords and window samples in LOCAL coords.
+
+    中文：
+    在局部坐标系中创建遮阳场景（挑檐 + 侧翼），并在局部坐标系中生成窗面采样点。
     """
     pts_local = rect_grid_samples_local(win, nx=nx, ny=ny)
     win_bottom = win.sill_h
@@ -60,6 +63,12 @@ def compute_eta_series(
       sun_dir_world (T,3)
       eta(t) = lit fraction for direct (unshaded fraction among all samples)
     NOTE: We treat samples with sun behind facade as eta=0 (no direct).
+
+    中文：
+    针对单个立面，计算：
+      sun_dir_world（T,3）的太阳方向（世界坐标）
+      eta(t)：直射光“受光比例/未遮挡比例”（在所有采样点中未被遮挡的比例）
+    注意：若太阳在立面背后，则视为 eta=0（无直射）。
     """
     T = len(times)
     eta = np.zeros((T,), float)
@@ -77,7 +86,7 @@ def compute_eta_series(
         sd = sun_dir_enu(alt, az)
         sun_dirs[k] = sd
 
-        # Sun must be in front of window
+        # Sun must be in front of window  # 中文：太阳必须位于窗的正前方（与外法线同向一侧）
         if np.dot(sd, frame.n) <= 1e-9:
             eta[k] = 0.0
             continue
@@ -91,7 +100,7 @@ def compute_eta_series(
 
 def evaluate_design(
     times: pd.DatetimeIndex,
-    weather: pd.DataFrame,  # columns: Tout, DNI, DHI
+    weather: pd.DataFrame,  # columns: Tout, DNI, DHI  # 中文：天气数据列：室外温度 Tout、直射 DNI、散射 DHI
     lat_deg: float,
     frames: dict[str, Frame],
     wins: dict[str, WindowSpec],
@@ -99,7 +108,7 @@ def evaluate_design(
     nx: int,
     ny: int,
     design: Design,
-    # thermal params:
+    # thermal params:  # 中文：热工参数
     UA_total: float,
     SHGC: float,
     k_diff: float,
@@ -109,7 +118,7 @@ def evaluate_design(
     Qint_work: float,
     Qint_off: float,
     dt_hours: float,
-    # comfort/daylight params:
+    # comfort/daylight params:  # 中文：舒适性/采光参数
     glare_depth_thresh: float,
     glare_hours_max: float,
     work_start: int,
@@ -120,14 +129,14 @@ def evaluate_design(
     C_dl: float,
     k_diff_shade: float,
     floor_area: float,
-    # objective weights:
+    # objective weights:  # 中文：目标函数权重
     w_cool: float,
     w_heat: float,
-    # baseline results for metrics:
+    # baseline results for metrics:  # 中文：用于指标计算的基准结果
     baseline_J: float,
     baseline_Qcool_peak_kW: float,
 ) -> EvalOutputs:
-    # build per-facade scenes & samples
+    # build per-facade scenes & samples  # 中文：为每个立面构建遮阳场景与窗面采样点
     scenes = {}
     samples = {}
     for f in frames.keys():
@@ -135,7 +144,7 @@ def evaluate_design(
         scenes[f] = scene
         samples[f] = pts_local
 
-    # compute sun dirs and eta for each facade, also facade irradiance
+    # compute sun dirs and eta for each facade, also facade irradiance  # 中文：计算太阳方向与 eta，并计算各立面辐照
     Tout = weather["Tout"].to_numpy(float)
     DNI = weather["DNI"].to_numpy(float)
     DHI = weather["DHI"].to_numpy(float)
@@ -151,11 +160,11 @@ def evaluate_design(
         if sun_dirs_world is None:
             sun_dirs_world = sun_dirs
 
-        # irradiance on this facade
+        # irradiance on this facade  # 中文：该立面的辐照度（直射与散射）
         Idir = np.zeros_like(DNI)
         Idiff = np.zeros_like(DHI)
-        # facade azimuth is encoded by frame.n; recover azimuth for irradiance calc:
-        # az = atan2(n_x, n_y)
+        # facade azimuth is encoded by frame.n; recover azimuth for irradiance calc:  # 中文：立面方位由 frame.n 隐含，先恢复方位角以便计算入射
+        # az = atan2(n_x, n_y)  # 中文：方位角 az 的恢复方式（由法线分量反推）
         az = np.rad2deg(np.arctan2(frame.n[0], frame.n[1])) % 360.0
 
         for k in range(len(times)):
@@ -165,7 +174,7 @@ def evaluate_design(
         Idir_facade[f] = Idir
         Idiff_facade[f] = Idiff
 
-    # comfort constraints
+    # comfort constraints  # 中文：舒适性约束（眩光/采光）
     glare_res = compute_glare_hours(
         times, frames, wins, samples, scenes,
         sun_dirs_world, dt_hours,
@@ -187,7 +196,7 @@ def evaluate_design(
         lux_min=lux_min
     )
 
-    # energy
+    # energy  # 中文：能耗计算
     energy = compute_energy(
         times, Tout,
         Idir_facade, Idiff_facade, eta_facade,
@@ -203,7 +212,7 @@ def evaluate_design(
 
     feasible = glare_ok and dl_ok
 
-    # metrics (vs baseline)
+    # metrics (vs baseline)  # 中文：与基准方案对比的指标
     AESR = (baseline_J - energy.J) / max(1e-9, baseline_J) * 100.0
     PLR = (baseline_Qcool_peak_kW - energy.Qcool_peak_kW) / max(1e-9, baseline_Qcool_peak_kW) * 100.0
 

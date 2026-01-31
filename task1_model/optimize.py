@@ -1,4 +1,4 @@
-# task1_model/optimize.py
+# task1_model/optimize.py  # 中文：简单网格搜索优化
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
