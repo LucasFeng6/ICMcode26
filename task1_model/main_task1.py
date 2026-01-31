@@ -118,7 +118,7 @@ def main():
     # Baseline evaluation (no shading)  # 中文：基准方案评估（无遮阳）
     # -------------------------
     log_stage("baseline evaluation")
-    baseline = Design(D_oh=0.0, D_fin=0.0, beta_fin_deg=0.0)
+    baseline = Design(D_oh=0.0, fin_w=0.0, beta_fin_deg=0.0)
     base_out = evaluate_design(
         times, weather, lat_deg,
         frames, wins, Awin,
@@ -158,8 +158,8 @@ def main():
     # -------------------------
     log_stage("grid search optimization")
     D_oh_list = np.linspace(0.0, 2.0, 11)        # 0..2m  # 中文：挑檐深度范围 0..2 米（仅南向生效）
-    # For N/E/W we always install fins; D_fin is kept as an "on/off" flag in geometry generation.
-    D_fin_list = np.array([1.0])                 # 中文：固定为启用鳍片（任意正值均可）
+    # fin_w is fin width (m), upper bound is win_width/3 (=1.0 for 3m windows)
+    fin_w_list = np.arange(0.1, 1.01, 0.1)       # 0.1..1.0 m, step 0.1  # 中文：鳍片宽度范围 0.1..1.0 米，步长 0.1
     beta_list = np.arange(0.0, 91.0, 15.0)       # 0..90 deg  # 中文：鳍片旋转角度范围 0..90 度（0=完全打开）
 
     best = grid_search(
@@ -174,7 +174,7 @@ def main():
         env.tau_diff, dl.kappa, dl.C_dl, dl.k_diff_shade, floor_area,
         w.w_cool, w.w_heat,
         baseline_J, baseline_peak,
-        D_oh_list, D_fin_list, beta_list
+        D_oh_list, fin_w_list, beta_list
     )
 
     log_stage("grid search complete")

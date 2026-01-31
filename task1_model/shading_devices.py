@@ -12,8 +12,8 @@ class OverhangParams:
 
 @dataclass(frozen=True)
 class FinParams:
-    depth: float          # D_fin (m)  # 中文：侧翼外挑深度 D_fin（米）
-    angle_deg: float      # beta_fin (deg) rotation around vertical axis  # 中文：侧翼绕竖直轴旋转角 beta_fin（度）
+    depth: float          # fin_w (m) -> fin width (panel width)  # 中文：fin_w 作为鳍片宽度（米），最大不超过窗宽/3
+    angle_deg: float      # beta_fin (deg) rotation around vertical axis  # 中文：鳍片绕竖直轴旋转角 beta_fin（度）
     thickness: float = 0.03
     side_offset: float = 0.00 # offset from window edge  # 中文：相对窗边的水平偏移（米）
     top_margin: float = 0.05
@@ -61,13 +61,13 @@ def _rotate_about_v(mesh: trimesh.Trimesh, angle_deg: float, pivot: np.ndarray) 
 def make_fins_mesh_local(win_width: float, win_bottom_v: float, win_top_v: float, p: FinParams) -> trimesh.Trimesh:
     """
     Three rotating panels across the window width (u direction).
-    - Window width is assumed 3m in this project, so each panel is 1m wide.
+    - fin width is a decision variable (fin_w) with an upper bound of win_width/3.
     - beta_fin_deg = 0 means fully open (panel plane ⟂ window plane).
     - All 3 panels rotate in the same direction.
 
     中文：
     沿窗宽方向（u）均匀布置 3 片可旋转面板：
-    - 本项目窗宽默认 3m，因此每片面板宽 1m（极限时可完全遮挡窗户）。
+    - 鳍片宽度为决策变量 fin_w，但不超过窗宽/3（极限时可完全遮挡窗户）。
     - beta_fin_deg = 0 表示“完全打开”（面板平面与窗面垂直）。
     - 3 片面板同向旋转。
     """
@@ -75,10 +75,11 @@ def make_fins_mesh_local(win_width: float, win_bottom_v: float, win_top_v: float
         return trimesh.Trimesh(vertices=np.zeros((0, 3)), faces=np.zeros((0, 3), dtype=int), process=False)
 
     panel_count = 3
-    panel_w = win_width / panel_count
-    # Pivot axis is placed at n = 0.5m from the window plane when win_width=3m
-    # (more generally: n = panel_w/2), so rotating panels won't collide with the window.
-    pivot_n = panel_w / 2.0
+    max_panel_w = win_width / panel_count
+    panel_w = min(p.depth, max_panel_w)
+    # Pivot axis is placed at n = 0.5m from the window plane (per requirement),
+    # so panels (<= 1.0m wide) will not collide with the window.
+    pivot_n = 0.5
 
     fin_h = (win_top_v - win_bottom_v) + p.top_margin + p.bottom_margin
     # Panel is a thin box whose "width" is along local n when beta=0 (open state),

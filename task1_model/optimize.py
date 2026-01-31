@@ -43,14 +43,14 @@ def grid_search(
     baseline_J: float,
     baseline_Qcool_peak_kW: float,
     D_oh_list,
-    D_fin_list,
+    fin_w_list,
     beta_list,
     progress: bool = True,
     progress_every: int = 10,
 ) -> BestResult:
     best = None
 
-    total = len(D_oh_list) * len(D_fin_list) * len(beta_list)
+    total = len(D_oh_list) * len(fin_w_list) * len(beta_list)
     start = time.perf_counter()
     if progress:
         if progress_every <= 0:
@@ -62,9 +62,9 @@ def grid_search(
     i = 0
 
     for D_oh in D_oh_list:
-        for D_fin in D_fin_list:
+        for fin_w in fin_w_list:
             for beta in beta_list:
-                d = Design(D_oh=float(D_oh), D_fin=float(D_fin), beta_fin_deg=float(beta))
+                d = Design(D_oh=float(D_oh), fin_w=float(fin_w), beta_fin_deg=float(beta))
                 out = evaluate_design(
                     times, weather, lat_deg,
                     frames, wins, Awin,

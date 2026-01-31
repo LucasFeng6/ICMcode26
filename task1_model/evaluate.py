@@ -14,7 +14,7 @@ from .thermal import compute_energy, EnergyResult
 @dataclass(frozen=True)
 class Design:
     D_oh: float
-    D_fin: float
+    fin_w: float
     beta_fin_deg: float
 
 @dataclass(frozen=True)
@@ -59,7 +59,7 @@ def build_facade_scene_and_samples(
             win_width=win.width,
             win_bottom_v=win_bottom,
             win_top_v=win_top,
-            p=FinParams(depth=design.D_fin, angle_deg=design.beta_fin_deg),
+            p=FinParams(depth=design.fin_w, angle_deg=design.beta_fin_deg),
         )
 
     scene = RayScene.from_meshes([over, fins])
