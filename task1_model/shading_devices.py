@@ -60,38 +60,40 @@ def _rotate_about_v(mesh: trimesh.Trimesh, angle_deg: float, pivot: np.ndarray) 
 
 def make_fins_mesh_local(win_width: float, win_bottom_v: float, win_top_v: float, p: FinParams) -> trimesh.Trimesh:
     """
-    Two fins at left (u=0) and right (u=win_width) edges.
-    Each fin is a thin box with extents [thickness, height, depth] in [u,v,n].
-    Then rotate around vertical axis by angle_deg (positive rotates fin plane).
+    Three rotating panels across the window width (u direction).
+    - Window width is assumed 3m in this project, so each panel is 1m wide.
+    - beta_fin_deg = 0 means fully open (panel plane ⟂ window plane).
+    - All 3 panels rotate in the same direction.
 
     中文：
-    在窗户左右两侧（u=0 与 u=win_width）各放置一个侧翼。
-    每个侧翼是一个薄盒体，在 [u,v,n] 方向的尺寸为 [thickness, height, depth]，
-    然后绕竖直轴按 angle_deg 旋转（正角度表示侧翼平面按约定方向旋转）。
+    沿窗宽方向（u）均匀布置 3 片可旋转面板：
+    - 本项目窗宽默认 3m，因此每片面板宽 1m（极限时可完全遮挡窗户）。
+    - beta_fin_deg = 0 表示“完全打开”（面板平面与窗面垂直）。
+    - 3 片面板同向旋转。
     """
     if p.depth <= 0:
         return trimesh.Trimesh(vertices=np.zeros((0, 3)), faces=np.zeros((0, 3), dtype=int), process=False)
 
+    panel_count = 3
+    panel_w = win_width / panel_count
+    # Pivot axis is placed at n = 0.5m from the window plane when win_width=3m
+    # (more generally: n = panel_w/2), so rotating panels won't collide with the window.
+    pivot_n = panel_w / 2.0
+
     fin_h = (win_top_v - win_bottom_v) + p.top_margin + p.bottom_margin
-    ext = np.array([p.thickness, fin_h, p.depth], float)
+    # Panel is a thin box whose "width" is along local n when beta=0 (open state),
+    # so at beta=90 it rotates to be parallel to the window plane and can fully cover it.
+    ext = np.array([p.thickness, fin_h, panel_w], float)  # [u, v, n]
     base = _box(ext)
 
-    # Left fin center (slightly outside edge)  # 中文：左侧翼中心（略微在窗边之外）
-    v_center = (win_bottom_v - p.bottom_margin) + fin_h/2.0
-    n_center = p.depth/2.0
-    left_u_center = -p.side_offset - p.thickness/2.0
-    right_u_center = win_width + p.side_offset + p.thickness/2.0
+    v_center = (win_bottom_v - p.bottom_margin) + fin_h / 2.0
 
-    left = base.copy()
-    left.apply_translation([left_u_center, v_center, n_center])
+    panels: list[trimesh.Trimesh] = []
+    for i in range(panel_count):
+        u_center = (i + 0.5) * panel_w
+        panel = base.copy()
+        panel.apply_translation([u_center, v_center, pivot_n])
+        panel = _rotate_about_v(panel, p.angle_deg, pivot=np.array([u_center, v_center, pivot_n]))
+        panels.append(panel)
 
-    right = base.copy()
-    right.apply_translation([right_u_center, v_center, n_center])
-
-    # Rotate about vertical axis through each fin's center line at u edge  # 中文：绕竖直轴旋转，轴线通过各侧翼在 u 边界处的中心线
-    # Pivot points chosen at fin centers to keep simple (can refine later)  # 中文：为简化，选取侧翼中心作为旋转枢轴点（可进一步精细化）
-    left = _rotate_about_v(left, p.angle_deg, pivot=np.array([left_u_center, v_center, 0.0]))
-    right = _rotate_about_v(right, -p.angle_deg, pivot=np.array([right_u_center, v_center, 0.0]))
-
-    combo = trimesh.util.concatenate([left, right])
-    return combo
+    return trimesh.util.concatenate(panels)

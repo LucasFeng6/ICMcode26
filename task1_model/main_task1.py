@@ -150,9 +150,10 @@ def main():
     # -------------------------
     # Optimization grid (task 1)  # 中文：优化网格（Task 1）
     # -------------------------
-    D_oh_list = np.linspace(0.0, 2.0, 11)        # 0..2m  # 中文：挑檐深度范围 0..2 米
-    D_fin_list = np.linspace(0.0, 1.0, 11)       # 0..1m  # 中文：侧翼深度范围 0..1 米
-    beta_list = np.arange(0.0, 91.0, 15.0)       # 0..90 deg  # 中文：侧翼角度范围 0..90 度
+    D_oh_list = np.linspace(0.0, 2.0, 11)        # 0..2m  # 中文：挑檐深度范围 0..2 米（仅南向生效）
+    # For N/E/W we always install fins; D_fin is kept as an "on/off" flag in geometry generation.
+    D_fin_list = np.array([1.0])                 # 中文：固定为启用鳍片（任意正值均可）
+    beta_list = np.arange(0.0, 91.0, 15.0)       # 0..90 deg  # 中文：鳍片旋转角度范围 0..90 度（0=完全打开）
 
     best = grid_search(
         times, weather, lat_deg,

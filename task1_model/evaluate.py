@@ -27,6 +27,7 @@ class EvalOutputs:
     PLR: float
 
 def build_facade_scene_and_samples(
+    facade: str,
     frame: Frame,
     win: WindowSpec,
     nx: int,
@@ -43,10 +44,23 @@ def build_facade_scene_and_samples(
     win_bottom = win.sill_h
     win_top = win.sill_h + win.height
 
-    over = make_overhang_mesh_local(win_width=win.width, win_top_v=win_top,
-                                    p=OverhangParams(depth=design.D_oh))
-    fins = make_fins_mesh_local(win_width=win.width, win_bottom_v=win_bottom, win_top_v=win_top,
-                                p=FinParams(depth=design.D_fin, angle_deg=design.beta_fin_deg))
+    if facade.upper() == "S":
+        # South facade: overhang only
+        over = make_overhang_mesh_local(
+            win_width=win.width,
+            win_top_v=win_top,
+            p=OverhangParams(depth=design.D_oh),
+        )
+        fins = None
+    else:
+        # Non-south facades: fins only
+        over = None
+        fins = make_fins_mesh_local(
+            win_width=win.width,
+            win_bottom_v=win_bottom,
+            win_top_v=win_top,
+            p=FinParams(depth=design.D_fin, angle_deg=design.beta_fin_deg),
+        )
 
     scene = RayScene.from_meshes([over, fins])
     return scene, pts_local
@@ -140,7 +154,7 @@ def evaluate_design(
     scenes = {}
     samples = {}
     for f in frames.keys():
-        scene, pts_local = build_facade_scene_and_samples(frames[f], wins[f], nx, ny, design)
+        scene, pts_local = build_facade_scene_and_samples(f, frames[f], wins[f], nx, ny, design)
         scenes[f] = scene
         samples[f] = pts_local
 
