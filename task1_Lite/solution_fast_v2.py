@@ -367,7 +367,7 @@ def evaluate_design(design_params, weather_data, sun_vecs, work_mask):
 
 def run_optimization():
     print("正在初始化数据...")
-    weather_path = r"E:\数模\26美赛\数据\weather_Miami Intl Ap3.csv"
+    weather_path = r"E:\数模\26美赛\数据\weather_Miami Intl Ap.csv"
     # 请确保此处的纬度正确
     df, sun_vecs, work_mask = load_and_preprocess(weather_path, lat_deg=25)
 
