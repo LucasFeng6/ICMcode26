@@ -34,8 +34,10 @@ class Config:
     # 3. 鳍片角度
     Beta_range = np.linspace(0.0, 60.0, 4) # 0, 20, 40, 60
     # 4. 玻璃 SHGC (新增决策变量)
+    # 控制更精细，朝南和其他朝向可使用不同SHGC（建筑可采用两种玻璃）
     # 范围通常在 0.25 (高性能Low-E) 到 0.75 (普通透明) 之间
-    SHGC_range = [0.3, 0.4, 0.5, 0.6, 0.7]
+    SHGC_S_range = [0.3, 0.4, 0.5, 0.6, 0.7]
+    SHGC_Other_range = [0.3, 0.4, 0.5, 0.6, 0.7]
 
     # 系统效率
     COP_cool = 3.2
@@ -45,7 +47,7 @@ class Config:
     Q_int_off = 3000.0
 
     # 约束条件
-    glare_depth_limit = 1.5
+    glare_depth_limit = 2
     glare_hours_max = 500.0
     lux_min = 300.0
     daylight_passing_rate = 0.5
@@ -251,15 +253,14 @@ def load_and_preprocess(weather_path, lat_deg):
 
 def evaluate_design(design_params, weather_data, sun_vecs, work_mask):
     """
-    design_params: (D_oh, D_fin, beta, SHGC)
+    design_params: (D_oh, D_fin, beta, SHGC_S, SHGC_Other)
     """
     # 1. 解包变量
-    D_oh, D_fin, beta, SHGC_val = design_params
+    D_oh, D_fin, beta, SHGC_s, SHGC_other = design_params
 
     # 2. 确定物理关联
     # 假设玻璃的散射透射率与 SHGC 成正比
     # 简单模型: tau_diff = SHGC
-    tau_glass_diff_curr = SHGC_val
 
     # --- 面积计算 ---
     A_facade_S, A_facade_N = Config.L * Config.H, Config.L * Config.H
@@ -273,19 +274,22 @@ def evaluate_design(design_params, weather_data, sun_vecs, work_mask):
     # --- 遮阳计算 ---
     k_diff_dyn = calc_diffuse_factor(D_oh, D_fin, beta, Config.win_width, Config.win_height)
 
-    # 立面配置 (面积, 方位, 是否有挑檐, 是否有侧翼)
+    # 立面配置 (面积, 方位, 是否有挑檐, 是否有侧翼, 是否南向)
     # 策略：北向窗户不做垂直遮阳(D_fin=0)，只受 SHGC 影响
     facade_info = [
-        (A_win_S, 180, True, True),   # South
-        (A_win_N, 0,   False, False), # North (无遮阳构件)
-        (A_win_E, 90,  False, True),  # East
-        (A_win_W, 270, False, True)   # West
+        (A_win_S, 180, True, True,  True),   # South
+        (A_win_N, 0,   False, False, False), # North (无遮阳构件)
+        (A_win_E, 90,  False, True,  False), # East
+        (A_win_W, 270, False, True,  False)  # West
     ]
 
     Q_solar_total = np.zeros(len(weather_data))
     glare_mask_year = np.zeros(len(weather_data), dtype=bool)
+    E_in_diff = np.zeros(len(weather_data))
 
-    for (A_win, az, has_oh, use_fin) in facade_info:
+    for (A_win, az, has_oh, use_fin, is_south) in facade_info:
+        SHGC_val = SHGC_s if is_south else SHGC_other
+        tau_glass_diff_curr = SHGC_val
         d_oh_curr = D_oh if has_oh else 0.0
         d_fin_curr = D_fin if use_fin else 0.0
         beta_curr = beta if use_fin else 0.0
@@ -321,6 +325,9 @@ def evaluate_design(design_params, weather_data, sun_vecs, work_mask):
         )
         glare_mask_year |= is_glare
 
+        # 采光累积（分朝向的玻璃透射差异）
+        E_in_diff += (weather_data['DHI'].values * k_diff_dyn * A_win * tau_glass_diff_curr)
+
     # --- 热负荷 ---
     total_wall_area = 2*(Config.L + Config.W)*Config.H
     UA = ((total_wall_area - total_real_win_area) * Config.U_wall) + (total_real_win_area * Config.U_win)
@@ -335,9 +342,9 @@ def evaluate_design(design_params, weather_data, sun_vecs, work_mask):
 
     # --- 采光 ---
     # 室内平均照度 = 总通量 / 地板面积 * 光效系数
-    # 透射光受 SHGC 影响 (tau_glass_diff_curr = SHGC)
+    # 透射光受各朝向 SHGC 影响（已在立面循环中累积 E_in_diff）
     floor_area = Config.L * Config.W * 2
-    E_in_diff = (weather_data['DHI'].values * k_diff_dyn * total_real_win_area * tau_glass_diff_curr) / floor_area * Config.kappa_lux
+    E_in_diff = (E_in_diff / floor_area) * Config.kappa_lux
 
     daylight_ok_mask = (E_in_diff >= Config.lux_min) & work_mask
     daylight_hours = np.sum(daylight_ok_mask)
@@ -366,7 +373,7 @@ def run_optimization():
 
     # 计算 Baseline (SHGC=0.6, 无遮阳)
     print("计算 Baseline (SHGC=0.6)...")
-    base_res = evaluate_design((0.0, 0.0, 0.0, 0.6), df, sun_vecs, work_mask)
+    base_res = evaluate_design((0.0, 0.0, 0.0, 0.6, 0.6), df, sun_vecs, work_mask)
     print(f"Baseline Energy: {base_res['J']:.0f}, Glare: {base_res['GlareHours']:.0f}h")
 
     # 网格搜索
@@ -374,7 +381,8 @@ def run_optimization():
         Config.D_oh_range,
         Config.D_fin_range,
         Config.Beta_range,
-        Config.SHGC_range # 新增维度
+        Config.SHGC_S_range,
+        Config.SHGC_Other_range
     ))
 
     print(f"开始搜索 {len(combinations)} 种组合 (含SHGC优化)...")
@@ -394,8 +402,42 @@ def run_optimization():
     feasible_df = res_df[res_df['Feasible'] == True].copy()
 
     if len(feasible_df) == 0:
-        print("无可行解，展示最接近解...")
-        best_row = res_df.sort_values('J').iloc[0]
+        print("\n" + "!"*40)
+        print("警告：没有找到完全满足约束的解！")
+        print("正在展示【最接近】的可行解（最小眩光、最大采光、最小能耗）...")
+
+        best_glare = res_df.sort_values('GlareHours').iloc[0]
+        best_daylight = res_df.sort_values('DaylightHours', ascending=False).iloc[0]
+        best_energy = res_df.sort_values('J').iloc[0]
+
+        def fmt_params(row):
+            return (
+                f"SHGC_S={row['params'][3]:.2f}, "
+                f"SHGC_O={row['params'][4]:.2f}, "
+                f"D_oh={row['params'][0]:.2f}, "
+                f"D_fin={row['params'][1]:.2f}, "
+                f"Beta={row['params'][2]:.1f}"
+            )
+
+        print("\n--- 调试信息：无解时的最优候选 ---")
+        print(
+            f"1. 最小眩光解: Glare={best_glare['GlareHours']:.1f}h, "
+            f"DaylightRatio={best_glare['DaylightRatio']:.2f}, "
+            f"J={best_glare['J']:.0f}, {fmt_params(best_glare)}"
+        )
+        print(
+            f"2. 最大采光解: Glare={best_daylight['GlareHours']:.1f}h, "
+            f"DaylightRatio={best_daylight['DaylightRatio']:.2f}, "
+            f"J={best_daylight['J']:.0f}, {fmt_params(best_daylight)}"
+        )
+        print(
+            f"3. 节能最优解: Glare={best_energy['GlareHours']:.1f}h, "
+            f"DaylightRatio={best_energy['DaylightRatio']:.2f}, "
+            f"J={best_energy['J']:.0f}, {fmt_params(best_energy)}"
+        )
+        print("!"*40 + "\n")
+
+        best_row = best_energy
     else:
         best_row = feasible_df.loc[feasible_df['J'].idxmin()]
 
@@ -405,7 +447,8 @@ def run_optimization():
     print("   OPTIMAL RETROFIT STRATEGY (v2)   ")
     print("="*40)
     print(f"Design Parameters:")
-    print(f"  Glass SHGC:         {best_row['params'][3]:.2f}")
+    print(f"  Glass SHGC (South): {best_row['params'][3]:.2f}")
+    print(f"  Glass SHGC (Other): {best_row['params'][4]:.2f}")
     print(f"  Overhang Depth (S): {best_row['params'][0]:.2f} m")
     print(f"  Fin Width (E/W/S):  {best_row['params'][1]:.2f} m")
     print(f"  Fin Angle:          {best_row['params'][2]:.1f} deg")
