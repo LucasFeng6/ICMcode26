@@ -1,6 +1,7 @@
 # task1_model/comfort.py  # 中文：眩光与采光（舒适性）相关计算
 import numpy as np
 import pandas as pd
+from typing import Optional
 from dataclasses import dataclass
 from .frames import Frame
 from .ray_scene import RayScene
@@ -124,23 +125,34 @@ def daylight_ok(
     C_dl: float,
     work_start: int,
     work_end: int,
-    lux_min: float
+    lux_min: float,
+    dt_hours: float = 1.0,
+    ok_hours_min: Optional[float] = None,
 ) -> tuple[bool, np.ndarray]:
     """
     Diffuse-only daylight model:
       E_in_avg(t) = C_dl * kappa * DHI(t) * sum(tau*A*k_diff) / A_floor
-    Returns (all_ok, E_in_series)
+    Returns (ok, E_in_series)
+    - If ok_hours_min is None: require all work-hour timesteps to satisfy E_in >= lux_min (original behavior).
+    - If ok_hours_min is set: require total qualified work-hour hours >= ok_hours_min.
 
     中文：
     仅考虑散射光的采光模型：
       E_in_avg(t) = C_dl * kappa * DHI(t) * Σ(tau*A*k_diff) / A_floor
-    返回（是否全时段满足要求 all_ok，室内照度序列 E_in_series）。
+    返回（是否满足约束 ok，室内照度序列 E_in_series）。
     """
     trans_area = sum(A * tau_diff * k_diff for A in Awin_by_facade.values())
     E_in = C_dl * kappa * np.maximum(0.0, DHI) * (trans_area / max(1e-9, floor_area))
 
     ok = np.ones((len(times),), dtype=bool)
+    work_mask = np.zeros((len(times),), dtype=bool)
     for k, ts in enumerate(times):
         if within_work_hours(ts, work_start, work_end):
+            work_mask[k] = True
             ok[k] = (E_in[k] >= lux_min)
-    return bool(ok.all()), E_in
+
+    if ok_hours_min is None:
+        return bool(ok.all()), E_in
+
+    qualified_hours = float(ok[work_mask].sum() * float(dt_hours))
+    return bool(qualified_hours >= float(ok_hours_min)), E_in

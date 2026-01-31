@@ -37,17 +37,17 @@ class InternalGains:
 class DaylightingParams:
     # Diffuse-only daylight model: E_in = C_dl * kappa * DHI * sum(tau*A*kdiff) / A_floor  # 中文：仅散射光采光模型（见公式）
     kappa: float = 120.0  # lux per (W/m2) rough mapping for diffuse (tunable)  # 中文：散射辐照到照度的粗略换算系数（可调）
-    C_dl: float = 0.012   # transmission-to-average factor (tunable)  # 中文：透射到平均照度的系数（可调）
+    C_dl: float = 0.1   # transmission-to-average factor (tunable)  # 中文：透射到平均照度的系数（可调）
     k_diff_shade: float = 0.9  # shading blocks diffuse weakly  # 中文：遮阳对散射光的削弱系数（弱削弱）
 
 @dataclass(frozen=True)
 class ComfortConstraints:
-    glare_depth_m: float = 1.5
-    glare_hours_max: float = 50.0
-    daylight_lux_min: float = 300.0
+    glare_depth_m: float = 3
+    glare_hours_max: float = 1000.0
+    daylight_lux_min: float = 250.0
+    daylight_ok_hours_min: float = 1500.0  # work-hour timesteps with E_in >= daylight_lux_min  # 中文：工作时段内“照度合格(>=阈值)”的全年最少小时数
     work_start_hour: int = 8
     work_end_hour: int = 17
-
 @dataclass(frozen=True)
 class OptimizationWeights:
     w_cool: float = 1.0

@@ -138,6 +138,7 @@ def evaluate_design(
     work_start: int,
     work_end: int,
     lux_min: float,
+    daylight_ok_hours_min: float,
     tau_diff: float,
     kappa: float,
     C_dl: float,
@@ -207,7 +208,9 @@ def evaluate_design(
         C_dl=C_dl,
         work_start=work_start,
         work_end=work_end,
-        lux_min=lux_min
+        lux_min=lux_min,
+        dt_hours=dt_hours,
+        ok_hours_min=daylight_ok_hours_min,
     )
 
     # energy  # 中文：能耗计算
