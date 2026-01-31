@@ -38,6 +38,7 @@ class DaylightingParams:
     # Diffuse-only daylight model: E_in = C_dl * kappa * DHI * sum(tau*A*kdiff) / A_floor  # 中文：仅散射光采光模型（见公式）
     kappa: float = 120.0  # lux per (W/m2) rough mapping for diffuse (tunable)  # 中文：散射辐照到照度的粗略换算系数（可调）
     C_dl: float = 0.1   # transmission-to-average factor (tunable)  # 中文：透射到平均照度的系数（可调）
+    C_dir: float = 0.05  # direct-to-average factor (tunable)  # 中文：直射贡献到平均照度的系数（可调）
     k_diff_shade: float = 0.9  # shading blocks diffuse weakly  # 中文：遮阳对散射光的削弱系数（弱削弱）
 
 @dataclass(frozen=True)

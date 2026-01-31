@@ -7,7 +7,7 @@ from .frames import Frame
 from .sampling import WindowSpec, rect_grid_samples_local
 from .shading_devices import OverhangParams, FinParams, make_overhang_mesh_local, make_fins_mesh_local
 from .ray_scene import RayScene
-from .solar_geometry import solar_alt_az_deg, sun_dir_enu, facade_dir_irradiance, facade_diffuse_irradiance
+from .solar_geometry import solar_alt_az_deg, sun_dir_enu, facade_dir_irradiance, facade_diffuse_irradiance, within_work_hours
 from .comfort import compute_glare_hours, daylight_ok
 from .thermal import compute_energy, EnergyResult
 
@@ -21,7 +21,9 @@ class Design:
 class EvalOutputs:
     feasible: bool
     glare_hours: float
+    glare_ok_hours: float
     daylight_ok: bool
+    daylight_ok_hours: float
     energy: EnergyResult
     AESR: float
     PLR: float
@@ -142,6 +144,7 @@ def evaluate_design(
     tau_diff: float,
     kappa: float,
     C_dl: float,
+    C_dir: float,
     k_diff_shade: float,
     floor_area: float,
     # objective weights:  # 中文：目标函数权重
@@ -211,7 +214,14 @@ def evaluate_design(
         lux_min=lux_min,
         dt_hours=dt_hours,
         ok_hours_min=daylight_ok_hours_min,
+        Idir_facade=Idir_facade,
+        eta_facade=eta_facade,
+        C_dir=C_dir,
     )
+
+    work_mask = np.array([within_work_hours(ts, work_start, work_end) for ts in times], dtype=bool)
+    glare_ok_hours = float(((work_mask) & (~glare_res.glare_mask)).sum() * dt_hours)
+    daylight_ok_hours = float(((work_mask) & (E_in >= lux_min)).sum() * dt_hours)
 
     # energy  # 中文：能耗计算
     energy = compute_energy(
@@ -236,7 +246,9 @@ def evaluate_design(
     return EvalOutputs(
         feasible=feasible,
         glare_hours=glare_res.glare_hours,
+        glare_ok_hours=glare_ok_hours,
         daylight_ok=dl_ok,
+        daylight_ok_hours=daylight_ok_hours,
         energy=energy,
         AESR=float(AESR),
         PLR=float(PLR),

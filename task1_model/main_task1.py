@@ -63,7 +63,7 @@ def main():
     # -------------------------
     # User inputs (edit here)  # 中文：用户输入（在此处修改）
     # -------------------------
-    weather_path = r"E:\数模\26美赛\数据\weather_Miami Intl Ap.csv"  # <-- your file  天气文件路径
+    weather_path = r"E:\数模\26美赛\数据\weather_Miami Intl Ap3.csv"  # <-- your file  天气文件路径
     lat_deg = 15.0                   # Sungrove 低纬度近似值；若已知替换为真实纬度
 
     # 代表性窗户几何（按立面）——请在此处修改
@@ -88,7 +88,7 @@ def main():
     }
 
     # Sampling resolution  采样分辨率（窗面网格）
-    nx, ny = 12, 12
+    nx, ny = 16, 16
 
     # -------------------------
     # 加载配置参数
@@ -126,7 +126,7 @@ def main():
         UA_total, env.SHGC, dl.k_diff_shade, hvac.COP_cool, hvac.eta_heat, T_in,
         gains.Q_internal_work, gains.Q_internal_off, dt_hours,
         cc.glare_depth_m, cc.glare_hours_max, cc.work_start_hour, cc.work_end_hour,
-        cc.daylight_lux_min, cc.daylight_ok_hours_min, env.tau_diff, dl.kappa, dl.C_dl, dl.k_diff_shade, floor_area,
+        cc.daylight_lux_min, cc.daylight_ok_hours_min, env.tau_diff, dl.kappa, dl.C_dl, dl.C_dir, dl.k_diff_shade, floor_area,
         w.w_cool, w.w_heat,
         baseline_J=1.0,  # 占位符；稍后用真实基准值覆盖
         baseline_Qcool_peak_kW=1.0
@@ -142,7 +142,7 @@ def main():
         UA_total, env.SHGC, dl.k_diff_shade, hvac.COP_cool, hvac.eta_heat, T_in,
         gains.Q_internal_work, gains.Q_internal_off, dt_hours,
         cc.glare_depth_m, cc.glare_hours_max, cc.work_start_hour, cc.work_end_hour,
-        cc.daylight_lux_min, cc.daylight_ok_hours_min, env.tau_diff, dl.kappa, dl.C_dl, dl.k_diff_shade, floor_area,
+        cc.daylight_lux_min, cc.daylight_ok_hours_min, env.tau_diff, dl.kappa, dl.C_dl, dl.C_dir, dl.k_diff_shade, floor_area,
         w.w_cool, w.w_heat,
         baseline_J=baseline_J,
         baseline_Qcool_peak_kW=baseline_peak
@@ -168,7 +168,7 @@ def main():
     D_oh_list = np.linspace(0.0, 2.0, 11)        # 0..2m  # 中文：挑檐深度范围 0..2 米（仅南向生效）
     # fin_w is fin width (m), upper bound is win_width/3 (=1.0 for 3m windows)
     fin_w_list = np.arange(0.1, 1.01, 0.1)       # 0.1..1.0 m, step 0.1  # 中文：鳍片宽度范围 0.1..1.0 米，步长 0.1
-    beta_list = np.arange(0.0, 91.0, 15.0)       # 0..90 deg  # 中文：鳍片旋转角度范围 0..90 度（0=完全打开）
+    beta_list = np.arange(0.0, 61.0, 15.0)       # 0..90 deg  # 中文：鳍片旋转角度范围 0..90 度（0=完全打开）
 
     best = grid_search(
         times, weather, lat_deg,
@@ -179,7 +179,7 @@ def main():
         dt_hours,
         cc.glare_depth_m, cc.glare_hours_max, cc.work_start_hour, cc.work_end_hour,
         cc.daylight_lux_min, cc.daylight_ok_hours_min,
-        env.tau_diff, dl.kappa, dl.C_dl, dl.k_diff_shade, floor_area,
+        env.tau_diff, dl.kappa, dl.C_dl, dl.C_dir, dl.k_diff_shade, floor_area,
         w.w_cool, w.w_heat,
         baseline_J, baseline_peak,
         D_oh_list, fin_w_list, beta_list
@@ -187,10 +187,13 @@ def main():
 
     log_stage("grid search complete")
 
-    print("\n=== Best feasible retrofit ===")
+    print("\n=== Best retrofit ===")
     print("Design:", best.design)
-    print(f"Glare hours: {best.outputs.glare_hours:.1f} (<= 50)")
-    print(f"Daylight OK: {best.outputs.daylight_ok} (>= 1500 qualified work-hour hours)")
+    print(f"Feasible: {best.outputs.feasible}")
+    print(f"Glare hours: {best.outputs.glare_hours:.1f} (<= {cc.glare_hours_max:.0f})")
+    print(f"Glare OK hours: {best.outputs.glare_ok_hours:.1f}")
+    print(f"Daylight OK: {best.outputs.daylight_ok} (>= {cc.daylight_ok_hours_min:.0f} qualified work-hour hours)")
+    print(f"Daylight OK hours: {best.outputs.daylight_ok_hours:.1f}")
     print(
         f"E_cool(kWh): {best.outputs.energy.E_cool_kWh:.1f} "
         f"E_heat(kWh): {best.outputs.energy.E_heat_kWh:.1f} "

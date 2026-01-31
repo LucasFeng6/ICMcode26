@@ -128,6 +128,9 @@ def daylight_ok(
     lux_min: float,
     dt_hours: float = 1.0,
     ok_hours_min: Optional[float] = None,
+    Idir_facade: Optional[dict[str, np.ndarray]] = None,
+    eta_facade: Optional[dict[str, np.ndarray]] = None,
+    C_dir: float = 0.0,
 ) -> tuple[bool, np.ndarray]:
     """
     Diffuse-only daylight model:
@@ -142,7 +145,15 @@ def daylight_ok(
     返回（是否满足约束 ok，室内照度序列 E_in_series）。
     """
     trans_area = sum(A * tau_diff * k_diff for A in Awin_by_facade.values())
-    E_in = C_dl * kappa * np.maximum(0.0, DHI) * (trans_area / max(1e-9, floor_area))
+    E_diff = C_dl * kappa * np.maximum(0.0, DHI) * (trans_area / max(1e-9, floor_area))
+    E_dir = np.zeros_like(E_diff)
+    if Idir_facade is not None and eta_facade is not None and C_dir > 0.0:
+        for f, A in Awin_by_facade.items():
+            if f in Idir_facade and f in eta_facade:
+                E_dir += A * eta_facade[f] * Idir_facade[f]
+        E_dir = C_dir * kappa * (E_dir / max(1e-9, floor_area))
+
+    E_in = E_diff + E_dir
 
     ok = np.ones((len(times),), dtype=bool)
     work_mask = np.zeros((len(times),), dtype=bool)

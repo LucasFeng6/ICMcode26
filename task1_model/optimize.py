@@ -111,6 +111,7 @@ def grid_search(
     tau_diff: float,
     kappa: float,
     C_dl: float,
+    C_dir: float,
     k_diff_shade: float,
     floor_area: float,
     w_cool: float,
@@ -124,6 +125,7 @@ def grid_search(
     progress_every: int = 10,
 ) -> BestResult:
     best = None
+    best_any = None
 
     total = len(D_oh_list) * len(fin_w_list) * len(beta_list)
     start = time.perf_counter()
@@ -148,21 +150,6 @@ def grid_search(
     )
 
     Idir_facade, Idiff_facade = _compute_facade_irradiance(frames, DNI, DHI, sun_dirs_world)
-
-    dl_ok, _ = daylight_ok(
-        times, DHI,
-        Awin_by_facade=Awin,
-        tau_diff=tau_diff,
-        k_diff=k_diff_shade,
-        floor_area=floor_area,
-        kappa=kappa,
-        C_dl=C_dl,
-        work_start=work_start,
-        work_end=work_end,
-        lux_min=lux_min,
-        dt_hours=dt_hours,
-        ok_hours_min=daylight_ok_hours_min,
-    )
 
     # Cache per-facade results for separable design variables
     south_cache: dict[float, tuple[np.ndarray, np.ndarray]] = {}
@@ -219,15 +206,33 @@ def grid_search(
                 eta_S, glare_S = south_cache[float(D_oh)]
                 eta_fac, glare_fac = fin_cache[(float(fin_w), float(beta))]
                 eta_facade = {"S": eta_S, **eta_fac}
+
+                dl_ok, E_in = daylight_ok(
+                    times, DHI,
+                    Awin_by_facade=Awin,
+                    tau_diff=tau_diff,
+                    k_diff=k_diff_shade,
+                    floor_area=floor_area,
+                    kappa=kappa,
+                    C_dl=C_dl,
+                    work_start=work_start,
+                    work_end=work_end,
+                    lux_min=lux_min,
+                    dt_hours=dt_hours,
+                    ok_hours_min=daylight_ok_hours_min,
+                    Idir_facade=Idir_facade,
+                    eta_facade=eta_facade,
+                    C_dir=C_dir,
+                )
+                daylight_ok_hours = float(((work_mask) & (E_in >= lux_min)).sum() * dt_hours)
                 glare_max = np.maximum.reduce(
                     [glare_S, glare_fac["N"], glare_fac["E"], glare_fac["W"]]
                 )
                 glare_hours = float((glare_max > glare_depth_thresh).sum() * dt_hours)
+                glare_ok_hours = float(((work_mask) & (glare_max <= glare_depth_thresh)).sum() * dt_hours)
                 glare_ok = glare_hours <= glare_hours_max
 
                 feasible = bool(glare_ok and dl_ok)
-                if not feasible:
-                    continue
 
                 energy = compute_energy(
                     times, Tout,
@@ -247,17 +252,23 @@ def grid_search(
 
                 d = Design(D_oh=float(D_oh), fin_w=float(fin_w), beta_fin_deg=float(beta))
                 out = EvalOutputs(
-                    feasible=True,
+                    feasible=feasible,
                     glare_hours=glare_hours,
+                    glare_ok_hours=glare_ok_hours,
                     daylight_ok=dl_ok,
+                    daylight_ok_hours=daylight_ok_hours,
                     energy=energy,
                     AESR=float(AESR),
                     PLR=float(PLR),
                 )
 
-                if (best is None) or (out.energy.J < best.outputs.energy.J):
+                if feasible and ((best is None) or (out.energy.J < best.outputs.energy.J)):
                     best = BestResult(d, out)
+                if (best_any is None) or (out.energy.J < best_any.outputs.energy.J):
+                    best_any = BestResult(d, out)
 
-    if best is None:
-        raise RuntimeError("No feasible design found. Relax bounds or check daylight/glare parameters.")
-    return best
+    if best is not None:
+        return best
+    if best_any is not None:
+        return best_any
+    raise RuntimeError("No feasible design found. Relax bounds or check daylight/glare parameters.")
